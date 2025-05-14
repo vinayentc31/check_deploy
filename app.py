@@ -6,13 +6,27 @@ import openai
 
 
 
-def search_flights(from_city, to_city):
+def search_flights(from_city, to_city, depart_date, trip_type="One way", return_date=None):
     df = pd.read_excel("flights.xlsx")
-    results = df[
+    df['Date'] = pd.to_datetime(df['Date']).dt.date
+
+    depart_flights = df[
         (df['From'].str.lower() == from_city.lower()) &
-        (df['To'].str.lower() == to_city.lower())
+        (df['To'].str.lower() == to_city.lower()) &
+        (df['Date'] == depart_date)
     ]
-    return results
+
+    if trip_type == "Return" and return_date:
+        return_flights = df[
+            (df['From'].str.lower() == to_city.lower()) &
+            (df['To'].str.lower() == from_city.lower()) &
+            (df['Date'] == return_date)
+        ]
+        return depart_flights, return_flights
+
+    return depart_flights, pd.DataFrame()  # Empty df if not a return trip
+
+
 
 def ask_gpt(query):
     openai.api_key = st.secrets["OPENAI_API_KEY"]
@@ -111,12 +125,26 @@ with tab1:
         return_date = st.date_input("Return", value=pd.to_datetime("2025-05-21"))
 
     if st.button("🔍 Search Flights", type="primary"):
-        flights = search_flights(from_city, to_city)
-        if not flights.empty:
-            st.success(f"{len(flights)} flights found.")
-            st.dataframe(flights)
+        outbound_flights, return_flights = search_flights(
+            from_city, to_city, depart_date, trip_type, return_date
+        )
+
+        if not outbound_flights.empty:
+            st.success(f"{len(outbound_flights)} outbound flights found.")
+            st.subheader("Outbound Flights")
+            st.dataframe(outbound_flights)
         else:
-            st.warning("No flights found.")
+            st.warning("No outbound flights found.")
+
+        if trip_type == "Return":
+            if not return_flights.empty:
+                st.success(f"{len(return_flights)} return flights found.")
+                st.subheader("Return Flights")
+                st.dataframe(return_flights)
+            else:
+                st.warning("No return flights found.")
+
+
 
     st.markdown("</div>", unsafe_allow_html=True)
 
